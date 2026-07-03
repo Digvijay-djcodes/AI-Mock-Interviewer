@@ -11,8 +11,8 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: [
-        "http://localhost:3000", // For local development
-        "https://ai-mock-interviewer.vercel.app" // For production deployment
+        "http://localhost:3001", // For local development
+        "https://ai-mock-interviewer-platform.vercel.app" // For production deployment
     ], 
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true

@@ -238,7 +238,7 @@ Default endpoints:
 | Service              | URL                   |
 | -------------------- | --------------------- |
 | Backend API          | http://localhost:3001 |
-| Frontend Application | http://localhost:5173 |
+| Frontend Application | http://localhost:3000 |
 
 ---
 

@@ -9,7 +9,14 @@ import bcrypt from "bcryptjs";
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: [
+        "http://localhost:3000", // For local development
+        "https://ai-mock-interviewer.vercel.app" // For production deployment
+    ], 
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}));
 app.use(express.text({ type: ["application/sdp", "text/plain"] }));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);

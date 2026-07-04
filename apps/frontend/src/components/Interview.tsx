@@ -11,6 +11,7 @@ export function Interview() {
     const { interviewId } = useParams();
     const navigate = useNavigate();
 
+    const [hasStarted, setHasStarted] = useState(false); // NEW: Controls the start screen
     const [status, setStatus] = useState<Status>("connecting");
     const [transcript, setTranscript] = useState("");
     const [isListening, setIsListening] = useState(false);
@@ -38,19 +39,6 @@ export function Interview() {
             recognition.onend = () => setIsListening(false);
 
             recognitionRef.current = recognition;
-            setStatus("live");
-            
-            const initialGreeting = "Hi, I'm your AI interviewer. I have reviewed your GitHub profile, and I'm ready to begin. Could you start by briefly introducing yourself?";
-            speak(initialGreeting);
-            
-            // FIX: Attach the JWT token to the init request
-            const token = localStorage.getItem("token");
-            axios.post(`${BACKEND_URL}/api/v1/interview/${interviewId}/init`, { 
-                message: initialGreeting 
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            }).catch(console.error);
-
         } else {
             alert("Your browser does not support Web Speech API. Use Chrome.");
         }
@@ -62,6 +50,29 @@ export function Interview() {
     const cleanup = () => {
         if (recognitionRef.current) recognitionRef.current.stop();
         window.speechSynthesis.cancel();
+    };
+
+    // NEW: This function triggers from the physical tap, unlocking mobile audio
+    const handleStartInterview = () => {
+        setHasStarted(true);
+        setStatus("live");
+
+        // The Magic Trick: Play a silent utterance immediately on click to unlock Safari/Chrome audio
+        const unlockAudio = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(unlockAudio);
+
+        // Small delay to ensure the engine is awake before speaking the actual text
+        setTimeout(() => {
+            const initialGreeting = "Hi, I'm your AI interviewer. I have reviewed your GitHub profile, and I'm ready to begin. Could you start by briefly introducing yourself?";
+            speak(initialGreeting);
+            
+            const token = localStorage.getItem("token");
+            axios.post(`${BACKEND_URL}/api/v1/interview/${interviewId}/init`, { 
+                message: initialGreeting 
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            }).catch(console.error);
+        }, 100);
     };
 
     const startListening = () => {
@@ -93,12 +104,21 @@ export function Interview() {
         if (englishVoice) utterance.voice = englishVoice;
         utterance.rate = 1.05;
 
+        // NEW: Safety net timeout. If the mobile browser swallows the event, force a turn switch after 15 seconds.
+        const safetyTimer = setTimeout(() => {
+            console.warn("Audio 'onend' event dropped by browser. Forcing turn switch.");
+            setIsAiSpeaking(false);
+            startListening();
+        }, 15000);
+
         utterance.onend = () => {
+            clearTimeout(safetyTimer); // Clear the safety net if it works properly
             setIsAiSpeaking(false);
             startListening(); 
         };
 
         utterance.onerror = (e) => {
+            clearTimeout(safetyTimer); // Clear the safety net if it errors
             console.error("TTS Error:", e);
             setIsAiSpeaking(false);
             startListening();
@@ -112,7 +132,6 @@ export function Interview() {
         setTranscript("");
         
         try {
-            // FIX: Attach the JWT token to the live message request
             const token = localStorage.getItem("token");
             const response = await axios.post(`${BACKEND_URL}/api/v1/message/${interviewId}`, {
                 message: userMessage
@@ -137,7 +156,6 @@ export function Interview() {
         setStatus("ending");
         cleanup();
         try {
-            // FIX: Attach the JWT token to the end interview request
             const token = localStorage.getItem("token");
             await axios.post(`${BACKEND_URL}/api/v1/interview/${interviewId}/end`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -148,6 +166,30 @@ export function Interview() {
         }
     };
 
+    // NEW: Render the start screen if they haven't tapped yet
+    if (!hasStarted) {
+        return (
+            <main className="flex h-screen w-screen flex-col items-center justify-center bg-zinc-950 text-zinc-50 px-4 text-center">
+                <div className="max-w-md space-y-6 w-full">
+                    <div className="bg-zinc-900/50 p-8 rounded-2xl border border-zinc-800 shadow-xl">
+                        <Bot className="size-16 text-emerald-500 mx-auto mb-6 animate-pulse" />
+                        <h2 className="text-2xl font-bold mb-3">Interviewer is Ready</h2>
+                        <p className="text-zinc-400 text-sm mb-8">
+                            To ensure your device's audio works correctly, please tap the button below to start the session.
+                        </p>
+                        <button 
+                            onClick={handleStartInterview}
+                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl px-6 py-4 text-lg transition-colors"
+                        >
+                            Tap to Start
+                        </button>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    // EXISTING: The main interview UI
     return (
         <main className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-950 text-zinc-50">
             <header className="flex items-center justify-between px-6 py-5 border-b border-zinc-800/50 bg-zinc-900/20 backdrop-blur">
